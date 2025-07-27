@@ -1,0 +1,678 @@
+var __defProp = Object.defineProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
+// server/index.ts
+import express2 from "express";
+
+// server/routes.ts
+import { createServer } from "http";
+import { WebSocketServer, WebSocket } from "ws";
+
+// shared/schema.ts
+var schema_exports = {};
+__export(schema_exports, {
+  chatMessageRelations: () => chatMessageRelations,
+  chatMessages: () => chatMessages,
+  insertChatMessageSchema: () => insertChatMessageSchema,
+  insertInventorySchema: () => insertInventorySchema,
+  insertSyncLogSchema: () => insertSyncLogSchema,
+  insertVendorConnectionSchema: () => insertVendorConnectionSchema,
+  insertVendorSchema: () => insertVendorSchema,
+  inventory: () => inventory,
+  inventoryRelations: () => inventoryRelations,
+  syncLog: () => syncLog,
+  syncLogRelations: () => syncLogRelations,
+  vendorConnectionRelations: () => vendorConnectionRelations,
+  vendorConnections: () => vendorConnections,
+  vendorRelations: () => vendorRelations,
+  vendors: () => vendors
+});
+import { sql, relations } from "drizzle-orm";
+import { pgTable, text, varchar, integer, timestamp, boolean, real, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+var vendors = pgTable("vendors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: varchar("vendor_id").notNull().unique(),
+  // VM1234 format
+  name: text("name").notNull(),
+  primaryLanguage: varchar("primary_language").notNull().default("en"),
+  voiceLanguage: varchar("voice_language").notNull().default("en-US"),
+  autoTranslate: boolean("auto_translate").default(true),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  isOnline: boolean("is_online").default(true),
+  lastSeen: timestamp("last_seen").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow()
+});
+var inventory = pgTable("inventory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: varchar("vendor_id").notNull().references(() => vendors.id),
+  itemName: text("item_name").notNull(),
+  quantity: integer("quantity").notNull().default(0),
+  unit: varchar("unit").notNull().default("units"),
+  // units, kg, liters, etc.
+  lowStockThreshold: integer("low_stock_threshold").default(2),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+var chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: varchar("vendor_id").notNull().references(() => vendors.id),
+  message: text("message").notNull(),
+  originalLanguage: varchar("original_language").notNull(),
+  translations: jsonb("translations"),
+  // Store translations for different languages
+  timestamp: timestamp("timestamp").defaultNow()
+});
+var vendorConnections = pgTable("vendor_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: varchar("vendor_id").notNull().references(() => vendors.id),
+  connectedVendorId: varchar("connected_vendor_id").notNull().references(() => vendors.id),
+  status: varchar("status").notNull().default("pending"),
+  // pending, connected, blocked
+  createdAt: timestamp("created_at").defaultNow()
+});
+var syncLog = pgTable("sync_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: varchar("vendor_id").notNull().references(() => vendors.id),
+  syncType: varchar("sync_type").notNull(),
+  // inventory, messages, profile
+  status: varchar("status").notNull(),
+  // success, failed, pending
+  lastSync: timestamp("last_sync").defaultNow()
+});
+var vendorRelations = relations(vendors, ({ many }) => ({
+  inventory: many(inventory),
+  messages: many(chatMessages),
+  connections: many(vendorConnections, { relationName: "vendor_connections" }),
+  connectedTo: many(vendorConnections, { relationName: "connected_vendors" }),
+  syncLogs: many(syncLog)
+}));
+var inventoryRelations = relations(inventory, ({ one }) => ({
+  vendor: one(vendors, {
+    fields: [inventory.vendorId],
+    references: [vendors.id]
+  })
+}));
+var chatMessageRelations = relations(chatMessages, ({ one }) => ({
+  vendor: one(vendors, {
+    fields: [chatMessages.vendorId],
+    references: [vendors.id]
+  })
+}));
+var vendorConnectionRelations = relations(vendorConnections, ({ one }) => ({
+  vendor: one(vendors, {
+    fields: [vendorConnections.vendorId],
+    references: [vendors.id],
+    relationName: "vendor_connections"
+  }),
+  connectedVendor: one(vendors, {
+    fields: [vendorConnections.connectedVendorId],
+    references: [vendors.id],
+    relationName: "connected_vendors"
+  })
+}));
+var syncLogRelations = relations(syncLog, ({ one }) => ({
+  vendor: one(vendors, {
+    fields: [syncLog.vendorId],
+    references: [vendors.id]
+  })
+}));
+var insertVendorSchema = createInsertSchema(vendors).omit({
+  id: true,
+  vendorId: true,
+  createdAt: true,
+  lastSeen: true
+});
+var insertInventorySchema = createInsertSchema(inventory).omit({
+  id: true,
+  updatedAt: true
+});
+var insertChatMessageSchema = createInsertSchema(chatMessages).omit({
+  id: true,
+  timestamp: true
+});
+var insertVendorConnectionSchema = createInsertSchema(vendorConnections).omit({
+  id: true,
+  createdAt: true
+});
+var insertSyncLogSchema = createInsertSchema(syncLog).omit({
+  id: true,
+  lastSync: true
+});
+
+// server/db.ts
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import ws from "ws";
+neonConfig.webSocketConstructor = ws;
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL must be set. Did you forget to provision a database?"
+  );
+}
+var pool = new Pool({ connectionString: process.env.DATABASE_URL });
+var db = drizzle({ client: pool, schema: schema_exports });
+
+// server/storage.ts
+import { eq, and, desc, asc, lt } from "drizzle-orm";
+var DatabaseStorage = class {
+  async getVendor(id) {
+    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, id));
+    return vendor || void 0;
+  }
+  async getVendorByVendorId(vendorId) {
+    const [vendor] = await db.select().from(vendors).where(eq(vendors.vendorId, vendorId));
+    return vendor || void 0;
+  }
+  async createVendor(insertVendor) {
+    const [vendor] = await db.insert(vendors).values(insertVendor).returning();
+    return vendor;
+  }
+  async updateVendor(id, updates) {
+    const [vendor] = await db.update(vendors).set(updates).where(eq(vendors.id, id)).returning();
+    return vendor || void 0;
+  }
+  async getNearbyVendors(vendorId, radius = 5) {
+    const nearbyVendors = await db.select().from(vendors).where(eq(vendors.isOnline, true)).limit(10);
+    return nearbyVendors.filter((v) => v.vendorId !== vendorId);
+  }
+  async getVendorInventory(vendorId) {
+    const vendor = await this.getVendorByVendorId(vendorId);
+    if (!vendor) return [];
+    return await db.select().from(inventory).where(eq(inventory.vendorId, vendor.id)).orderBy(asc(inventory.itemName));
+  }
+  async getInventoryItem(vendorId, itemName) {
+    const vendor = await this.getVendorByVendorId(vendorId);
+    if (!vendor) return void 0;
+    const [item] = await db.select().from(inventory).where(and(
+      eq(inventory.vendorId, vendor.id),
+      eq(inventory.itemName, itemName.toLowerCase())
+    ));
+    return item || void 0;
+  }
+  async updateInventoryItem(vendorId, itemName, quantity) {
+    const vendor = await this.getVendorByVendorId(vendorId);
+    if (!vendor) throw new Error("Vendor not found");
+    const existingItem = await this.getInventoryItem(vendorId, itemName);
+    if (existingItem) {
+      const [updated] = await db.update(inventory).set({
+        quantity: Math.max(0, quantity),
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq(inventory.id, existingItem.id)).returning();
+      return updated;
+    } else {
+      return await this.createInventoryItem({
+        vendorId: vendor.id,
+        itemName: itemName.toLowerCase(),
+        quantity: Math.max(0, quantity),
+        unit: "units"
+      });
+    }
+  }
+  async createInventoryItem(item) {
+    const [created] = await db.insert(inventory).values(item).returning();
+    return created;
+  }
+  async getLowStockItems(vendorId) {
+    const vendor = await this.getVendorByVendorId(vendorId);
+    if (!vendor) return [];
+    return await db.select().from(inventory).where(and(
+      eq(inventory.vendorId, vendor.id),
+      lt(inventory.quantity, inventory.lowStockThreshold)
+    ));
+  }
+  async getChatMessages(limit = 50) {
+    return await db.select().from(chatMessages).orderBy(desc(chatMessages.timestamp)).limit(limit);
+  }
+  async createChatMessage(message) {
+    const [created] = await db.insert(chatMessages).values(message).returning();
+    return created;
+  }
+  async getVendorConnections(vendorId) {
+    const vendor = await this.getVendorByVendorId(vendorId);
+    if (!vendor) return [];
+    return await db.select().from(vendorConnections).where(eq(vendorConnections.vendorId, vendor.id));
+  }
+  async createVendorConnection(connection) {
+    const [created] = await db.insert(vendorConnections).values(connection).returning();
+    return created;
+  }
+  async updateConnectionStatus(id, status) {
+    const [updated] = await db.update(vendorConnections).set({ status }).where(eq(vendorConnections.id, id)).returning();
+    return updated || void 0;
+  }
+  async createSyncLog(log2) {
+    const [created] = await db.insert(syncLog).values(log2).returning();
+    return created;
+  }
+  async getLastSync(vendorId, syncType) {
+    const vendor = await this.getVendorByVendorId(vendorId);
+    if (!vendor) return void 0;
+    const [sync] = await db.select().from(syncLog).where(and(
+      eq(syncLog.vendorId, vendor.id),
+      eq(syncLog.syncType, syncType)
+    )).orderBy(desc(syncLog.lastSync)).limit(1);
+    return sync || void 0;
+  }
+};
+var storage = new DatabaseStorage();
+
+// server/routes.ts
+import { z } from "zod";
+async function detectLanguage(text2) {
+  const commonSpanishWords = ["hola", "gracias", "por favor", "s\xED", "no", "qu\xE9", "c\xF3mo"];
+  const commonFrenchWords = ["bonjour", "merci", "oui", "non", "comment", "que", "o\xF9"];
+  const lowerText = text2.toLowerCase();
+  if (commonSpanishWords.some((word) => lowerText.includes(word))) {
+    return "es";
+  }
+  if (commonFrenchWords.some((word) => lowerText.includes(word))) {
+    return "fr";
+  }
+  return "en";
+}
+async function translateText(text2, targetLang, sourceLang = "auto") {
+  if (targetLang === sourceLang || sourceLang === "en" && targetLang === "en") {
+    return text2;
+  }
+  return `[Translated to ${targetLang}] ${text2}`;
+}
+async function registerRoutes(app2) {
+  const httpServer = createServer(app2);
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  const connectedClients = /* @__PURE__ */ new Map();
+  wss.on("connection", (ws2) => {
+    let vendorId = null;
+    ws2.on("message", async (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        if (message.type === "register" && message.vendorId) {
+          const messageVendorId = message.vendorId;
+          vendorId = messageVendorId;
+          connectedClients.set(vendorId, ws2);
+          const vendor = await storage.getVendorByVendorId(messageVendorId);
+          if (vendor) {
+            await storage.updateVendor(vendor.id, { isOnline: true });
+          }
+        }
+        if (message.type === "chat" && vendorId) {
+          const vendor = await storage.getVendorByVendorId(vendorId);
+          if (!vendor) return;
+          const detectedLang = await detectLanguage(message.text);
+          const translations = {
+            en: detectedLang === "en" ? message.text : await translateText(message.text, "en", detectedLang),
+            es: detectedLang === "es" ? message.text : await translateText(message.text, "es", detectedLang),
+            fr: detectedLang === "fr" ? message.text : await translateText(message.text, "fr", detectedLang)
+          };
+          const chatMessage = await storage.createChatMessage({
+            vendorId: vendor.id,
+            message: message.text,
+            originalLanguage: detectedLang,
+            translations
+          });
+          connectedClients.forEach((clientWs, clientVendorId) => {
+            if (clientWs.readyState === WebSocket.OPEN) {
+              storage.getVendorByVendorId(clientVendorId).then((clientVendor) => {
+                const preferredLang = clientVendor?.primaryLanguage || "en";
+                const translatedText = translations[preferredLang] || message.text;
+                clientWs.send(JSON.stringify({
+                  type: "chat",
+                  id: chatMessage.id,
+                  vendorId: vendor.vendorId,
+                  vendorName: vendor.name,
+                  message: translatedText,
+                  originalLanguage: detectedLang,
+                  timestamp: chatMessage.timestamp
+                }));
+              }).catch((error) => {
+                console.error("Error getting client vendor:", error);
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error("WebSocket message error:", error);
+      }
+    });
+    ws2.on("close", () => {
+      if (vendorId) {
+        connectedClients.delete(vendorId);
+        storage.getVendorByVendorId(vendorId).then((vendor) => {
+          if (vendor) {
+            storage.updateVendor(vendor.id, { isOnline: false });
+          }
+        }).catch((error) => {
+          console.error("Error updating vendor offline status:", error);
+        });
+      }
+    });
+  });
+  app2.post("/api/vendors/register", async (req, res) => {
+    try {
+      const validatedData = insertVendorSchema.parse(req.body);
+      let vendorId;
+      let existingVendor;
+      do {
+        vendorId = "VM" + Math.floor(Math.random() * 1e4).toString().padStart(4, "0");
+        existingVendor = await storage.getVendorByVendorId(vendorId);
+      } while (existingVendor);
+      const vendor = await storage.createVendor({
+        ...validatedData,
+        vendorId
+      });
+      res.json(vendor);
+    } catch (error) {
+      res.status(400).json({
+        message: error instanceof Error ? error.message : "Invalid vendor data"
+      });
+    }
+  });
+  app2.get("/api/vendors/:vendorId", async (req, res) => {
+    try {
+      const vendor = await storage.getVendorByVendorId(req.params.vendorId);
+      if (!vendor) {
+        return res.status(404).json({ message: "Vendor not found" });
+      }
+      res.json(vendor);
+    } catch (error) {
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to fetch vendor"
+      });
+    }
+  });
+  app2.put("/api/vendors/:vendorId", async (req, res) => {
+    try {
+      const vendor = await storage.getVendorByVendorId(req.params.vendorId);
+      if (!vendor) {
+        return res.status(404).json({ message: "Vendor not found" });
+      }
+      const updates = z.object({
+        name: z.string().optional(),
+        primaryLanguage: z.string().optional(),
+        voiceLanguage: z.string().optional(),
+        autoTranslate: z.boolean().optional(),
+        latitude: z.number().optional(),
+        longitude: z.number().optional()
+      }).parse(req.body);
+      const updatedVendor = await storage.updateVendor(vendor.id, updates);
+      res.json(updatedVendor);
+    } catch (error) {
+      res.status(400).json({
+        message: error instanceof Error ? error.message : "Invalid update data"
+      });
+    }
+  });
+  app2.get("/api/vendors/:vendorId/inventory", async (req, res) => {
+    try {
+      const inventory2 = await storage.getVendorInventory(req.params.vendorId);
+      res.json(inventory2);
+    } catch (error) {
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to fetch inventory"
+      });
+    }
+  });
+  app2.post("/api/vendors/:vendorId/inventory/use", async (req, res) => {
+    try {
+      const { itemName, quantity = 1 } = z.object({
+        itemName: z.string(),
+        quantity: z.number().optional()
+      }).parse(req.body);
+      const existingItem = await storage.getInventoryItem(req.params.vendorId, itemName);
+      const currentQuantity = existingItem?.quantity || 0;
+      const newQuantity = currentQuantity - quantity;
+      const updatedItem = await storage.updateInventoryItem(
+        req.params.vendorId,
+        itemName,
+        newQuantity
+      );
+      res.json(updatedItem);
+    } catch (error) {
+      res.status(400).json({
+        message: error instanceof Error ? error.message : "Failed to update inventory"
+      });
+    }
+  });
+  app2.post("/api/vendors/:vendorId/inventory", async (req, res) => {
+    try {
+      const vendor = await storage.getVendorByVendorId(req.params.vendorId);
+      if (!vendor) {
+        return res.status(404).json({ message: "Vendor not found" });
+      }
+      const validatedData = insertInventorySchema.parse({
+        ...req.body,
+        vendorId: vendor.id
+      });
+      const item = await storage.createInventoryItem(validatedData);
+      res.json(item);
+    } catch (error) {
+      res.status(400).json({
+        message: error instanceof Error ? error.message : "Invalid inventory data"
+      });
+    }
+  });
+  app2.get("/api/vendors/:vendorId/inventory/low-stock", async (req, res) => {
+    try {
+      const lowStockItems = await storage.getLowStockItems(req.params.vendorId);
+      res.json(lowStockItems);
+    } catch (error) {
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to fetch low stock items"
+      });
+    }
+  });
+  app2.get("/api/chat/messages", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit) || 50;
+      const messages = await storage.getChatMessages(limit);
+      res.json(messages.reverse());
+    } catch (error) {
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to fetch messages"
+      });
+    }
+  });
+  app2.get("/api/vendors/:vendorId/nearby", async (req, res) => {
+    try {
+      const radius = parseInt(req.query.radius) || 5;
+      const nearbyVendors = await storage.getNearbyVendors(req.params.vendorId, radius);
+      res.json(nearbyVendors);
+    } catch (error) {
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to fetch nearby vendors"
+      });
+    }
+  });
+  app2.post("/api/vendors/:vendorId/sync", async (req, res) => {
+    try {
+      const { syncType = "all" } = req.body;
+      const vendor = await storage.getVendorByVendorId(req.params.vendorId);
+      if (!vendor) {
+        return res.status(404).json({ message: "Vendor not found" });
+      }
+      await storage.createSyncLog({
+        vendorId: vendor.id,
+        syncType,
+        status: "success"
+      });
+      const [inventory2, lowStock, messages] = await Promise.all([
+        storage.getVendorInventory(req.params.vendorId),
+        storage.getLowStockItems(req.params.vendorId),
+        storage.getChatMessages(20)
+      ]);
+      res.json({
+        inventory: inventory2,
+        lowStock,
+        messages: messages.reverse(),
+        lastSync: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Sync failed"
+      });
+    }
+  });
+  return httpServer;
+}
+
+// server/vite.ts
+import express from "express";
+import fs from "fs";
+import path2 from "path";
+import { createServer as createViteServer, createLogger } from "vite";
+
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+var vite_config_default = defineConfig({
+  plugins: [
+    react(),
+    runtimeErrorOverlay(),
+    ...process.env.NODE_ENV !== "production" && process.env.REPL_ID !== void 0 ? [
+      await import("@replit/vite-plugin-cartographer").then(
+        (m) => m.cartographer()
+      )
+    ] : []
+  ],
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "client", "src"),
+      "@shared": path.resolve(import.meta.dirname, "shared"),
+      "@assets": path.resolve(import.meta.dirname, "attached_assets")
+    }
+  },
+  root: path.resolve(import.meta.dirname, "client"),
+  build: {
+    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    emptyOutDir: true
+  },
+  server: {
+    fs: {
+      strict: true,
+      deny: ["**/.*"]
+    }
+  }
+});
+
+// server/vite.ts
+import { nanoid } from "nanoid";
+var viteLogger = createLogger();
+function log(message, source = "express") {
+  const formattedTime = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
+async function setupVite(app2, server) {
+  const serverOptions = {
+    middlewareMode: true,
+    hmr: { server },
+    allowedHosts: true
+  };
+  const vite = await createViteServer({
+    ...vite_config_default,
+    configFile: false,
+    customLogger: {
+      ...viteLogger,
+      error: (msg, options) => {
+        viteLogger.error(msg, options);
+        process.exit(1);
+      }
+    },
+    server: serverOptions,
+    appType: "custom"
+  });
+  app2.use(vite.middlewares);
+  app2.use("*", async (req, res, next) => {
+    const url = req.originalUrl;
+    try {
+      const clientTemplate = path2.resolve(
+        import.meta.dirname,
+        "..",
+        "client",
+        "index.html"
+      );
+      let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      template = template.replace(
+        `src="/src/main.tsx"`,
+        `src="/src/main.tsx?v=${nanoid()}"`
+      );
+      const page = await vite.transformIndexHtml(url, template);
+      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+    } catch (e) {
+      vite.ssrFixStacktrace(e);
+      next(e);
+    }
+  });
+}
+function serveStatic(app2) {
+  const distPath = path2.resolve(import.meta.dirname, "public");
+  if (!fs.existsSync(distPath)) {
+    throw new Error(
+      `Could not find the build directory: ${distPath}, make sure to build the client first`
+    );
+  }
+  app2.use(express.static(distPath));
+  app2.use("*", (_req, res) => {
+    res.sendFile(path2.resolve(distPath, "index.html"));
+  });
+}
+
+// server/index.ts
+var app = express2();
+app.use(express2.json());
+app.use(express2.urlencoded({ extended: false }));
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path3 = req.path;
+  let capturedJsonResponse = void 0;
+  const originalResJson = res.json;
+  res.json = function(bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path3.startsWith("/api")) {
+      let logLine = `${req.method} ${path3} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "\u2026";
+      }
+      log(logLine);
+    }
+  });
+  next();
+});
+(async () => {
+  const server = await registerRoutes(app);
+  app.use((err, _req, res, _next) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    res.status(status).json({ message });
+    throw err;
+  });
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
+  }
+  const port = parseInt(process.env.PORT || "5000", 10);
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true
+  }, () => {
+    log(`serving on port ${port}`);
+  });
+})();

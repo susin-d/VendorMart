@@ -1,0 +1,82 @@
+Your VendorMate Website: A Top-to-Bottom Tour
+Your website is a powerful, all-in-one dashboard designed for a street vendor. It helps them manage stock, communicate with other vendors, and get important alerts in real-time.
+
+1. Welcome & Vendor ID
+xml
+<div class="card">
+  <h2>👋 Welcome to <span class="highlight">VendorMate</span></h2>
+  <p>🆔 Your Vendor ID: <span id="vendor-id" class="highlight"></span></p>
+</div>
+What it is: This is the first thing a user sees. It’s a simple greeting.
+
+How it works: Your unique Vendor ID (e.g., VM1234) is automatically generated and saved in the browser's local storage. This ID is crucial because it’s how the backend server recognizes you and fetches your specific stock data.
+
+2. Voice Input / Item Usage
+xml
+<div class="card">
+  <h3>🎙 Voice Input / Item Usage</h3>
+  <input type="text" id="item-input" placeholder="..."/>
+  <button onclick="recordUsage()">📉 Use Item</button>
+  <button onclick="startVoiceInput()">🔊 Speak</button>
+</div>
+What it is: This is the main action center for daily operations. A vendor can record when they use an item (like "rice" or "onions").
+
+How it works:
+
+Typing: A vendor types an item name (e.g., "tomatoes") and clicks "Use Item". This sends a request to your backend server, telling it to reduce the stock count for that item in the MongoDB database.
+
+Speaking: Clicking "Speak" uses the browser's Speech Recognition API to convert the vendor's voice into text, filling in the input box for them. This is a great accessibility feature.
+
+3. Stock Levels
+xml
+<div class="card">
+  <h3>📦 Stock Levels</h3>
+  <div id="stock-list">Loading stock...</div>
+</div>
+What it is: A live, real-time view of the vendor's current inventory.
+
+How it works: When the page loads, the JavaScript makes a call to your backend server. The server looks up your Vendor ID in the database, finds your current stock levels (e.g., rice: 9, onions: 4), and sends that data back to be displayed here. This section updates automatically after you use an item.
+
+4. Low Stock Alerts
+xml
+<div class="card" id="alerts-card" style="display: none;">
+  <h3 style="color: red;">⚠ Low Stock Alerts</h3>
+  <div id="alerts"></div>
+</div>
+What it is: An intelligent alert system that is hidden by default.
+
+How it works: The JavaScript constantly checks your stock levels. If any item's count drops to 2 or below, this entire card appears automatically with a warning message, prompting the vendor to restock.
+
+5. Nearby Vendor Connect
+xml
+<div class="card">
+  <h3>🤝 Nearby Vendor Connect</h3>
+  <button onclick="showNearbyVendors()">👥 Find Nearby Vendors</button>
+  <div id="nearby-vendors"></div>
+</div>
+What it is: A feature to help vendors find and connect with others nearby, fostering a sense of community.
+
+How it works: Clicking the "Find Nearby Vendors" button calls an API on your server. While it currently returns a sample list, this is designed to eventually use location data to find other registered vendors in the system.
+
+6. Vendor Group Chat
+xml
+<div class="card">
+  <h3>💬 Vendor Group Chat</h3>
+  <div id="chat-box" class="chat-box"></div>
+  <input type="text" id="chat-input" placeholder="..."/>
+  <button onclick="sendMessage()">✉️ Send</button>
+</div>
+What it is: A real-time chat room for all vendors using the app.
+
+How it works: This is one of the most advanced features. It uses Socket.IO. When you send a message, it doesn't just call a standard API. It sends the message over a live, persistent connection to the server. The server then instantly broadcasts that message to everyone else connected, so the chat appears on their screens immediately without needing to refresh the page. Messages are also saved in the database.
+
+7. Offline Sync
+xml
+<div class="card">
+  <h3>🌐 Offline Sync</h3>
+  <button onclick="syncData()">↺ Sync Now</button>
+  <p id="sync-status"></p>
+</div>
+What it is: A manual button to ensure the data on the screen is up-to-date with the server.
+
+How it works: Clicking "Sync Now" tells the frontend to re-fetch all the latest data (stock levels, etc.) from the server. This is useful if the connection was unstable or if the user wants to be absolutely sure they are seeing the most current information. It provides feedback like "Syncing..." and "Synced!" to the user.

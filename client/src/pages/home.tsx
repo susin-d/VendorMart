@@ -43,7 +43,7 @@ export default function Home() {
     if (vendor) {
       const interval = setInterval(() => {
         const now = new Date();
-        const diff = Math.floor((now.getTime() - new Date(vendor.lastSeen || vendor.createdAt).getTime()) / 60000);
+        const diff = Math.floor((now.getTime() - new Date(vendor.lastSeen || vendor.createdAt || now).getTime()) / 60000);
         if (diff < 1) {
           setLastSyncTime("Just now");
         } else if (diff < 60) {
@@ -284,7 +284,7 @@ export default function Home() {
         </Card>
 
         {/* Language Preferences */}
-        <LanguageSelector vendor={vendor} />
+        <LanguageSelector vendor={vendor || null} />
       </main>
 
       {/* Bottom Navigation */}

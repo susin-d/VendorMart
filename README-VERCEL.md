@@ -28,13 +28,13 @@ vercel login
 vercel --prod
 ```
 
-#### Option B: Using Vercel Dashboard
+#### Option B: Using Vercel Dashboard (Recommended)
 1. Go to vercel.com and connect your GitHub repository
 2. Import your project
-3. Set build settings:
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-   - **Install Command**: `npm install`
+3. Vercel will automatically detect the build settings from `vercel.json`:
+   - **Build Command**: `npm run build` (auto-detected)
+   - **Output Directory**: `dist` (auto-detected)
+   - **Functions**: Node.js runtime configured
 
 ### 3. Environment Variables
 In your Vercel dashboard, add these environment variables:

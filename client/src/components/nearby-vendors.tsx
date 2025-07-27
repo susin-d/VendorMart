@@ -13,7 +13,7 @@ interface NearbyVendorsProps {
 export default function NearbyVendors({ vendorId }: NearbyVendorsProps) {
   const { toast } = useToast();
   
-  const { data: nearbyVendors = [], isLoading, refetch } = useQuery({
+  const { data: nearbyVendors = [], isLoading, refetch } = useQuery<Vendor[]>({
     queryKey: ['/api/vendors', vendorId, 'nearby'],
     enabled: !!vendorId,
   });

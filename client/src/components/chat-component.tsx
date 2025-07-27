@@ -18,7 +18,7 @@ export default function ChatComponent({ vendorId }: ChatComponentProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch initial chat messages
-  const { data: initialMessages = [] } = useQuery({
+  const { data: initialMessages = [] } = useQuery<any[]>({
     queryKey: ['/api/chat/messages'],
     enabled: !!vendorId,
   });

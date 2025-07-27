@@ -41,7 +41,7 @@ export default function StockCard({ inventory, onRefresh }: StockCardProps) {
         ) : (
           inventory.map((item) => {
             const ItemIcon = getItemIcon(item.itemName);
-            const isLowStock = item.quantity <= item.lowStockThreshold;
+            const isLowStock = item.quantity <= (item.lowStockThreshold || 2);
             
             return (
               <div 

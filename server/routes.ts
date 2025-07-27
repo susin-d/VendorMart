@@ -99,6 +99,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   originalLanguage: detectedLang,
                   timestamp: chatMessage.timestamp
                 }));
+              }).catch(error => {
+                console.error('Error getting client vendor:', error);
               });
             }
           });
@@ -116,6 +118,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (vendor) {
             storage.updateVendor(vendor.id, { isOnline: false });
           }
+        }).catch(error => {
+          console.error('Error updating vendor offline status:', error);
         });
       }
     });

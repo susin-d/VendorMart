@@ -88,8 +88,9 @@ export default function Home() {
       });
 
       // Refresh data
-      syncData();
+      await syncData();
     } catch (error) {
+      console.error('Item usage error:', error);
       toast({
         title: "Error",
         description: "Failed to update inventory",

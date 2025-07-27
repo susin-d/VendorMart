@@ -1,0 +1,8 @@
+server/
+api/
+shared/
+*.md
+.replit
+.env*
+node_modules/
+.git/

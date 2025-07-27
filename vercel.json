@@ -7,25 +7,9 @@
       "config": {
         "distDir": "dist"
       }
-    },
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
-    {
-      "src": "/api/vendors/register",
-      "dest": "/api/vendors.js"
-    },
-    {
-      "src": "/api/vendors/([^/]+)",
-      "dest": "/api/vendors.js"
-    },
-    {
-      "src": "/api/vendors/([^/]+)/inventory(.*)",
-      "dest": "/api/inventory.js"
-    },
     {
       "src": "/(.*)",
       "dest": "/index.html"

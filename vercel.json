@@ -1,14 +1,8 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist/public"
-      }
-    }
-  ],
+  "buildCommand": "node build-static.js",
+  "outputDirectory": "dist/public",
+  "installCommand": "npm install",
   "routes": [
     {
       "src": "/assets/(.*)",

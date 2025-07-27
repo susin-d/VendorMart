@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Users, MapPin, UserPlus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import type { Vendor } from "@shared/schema";
+import { StaticApiService } from "@/lib/staticApi";
+import type { MockVendor } from "@/lib/mockData";
 
 interface NearbyVendorsProps {
   vendorId: string | undefined;
@@ -13,12 +14,12 @@ interface NearbyVendorsProps {
 export default function NearbyVendors({ vendorId }: NearbyVendorsProps) {
   const { toast } = useToast();
   
-  const { data: nearbyVendors = [], isLoading, refetch } = useQuery<Vendor[]>({
-    queryKey: ['/api/vendors', vendorId, 'nearby'],
-    enabled: !!vendorId,
+  const { data: nearbyVendors = [], isLoading, refetch } = useQuery<MockVendor[]>({
+    queryKey: ['nearby-vendors'],
+    queryFn: () => StaticApiService.getNearbyVendors(),
   });
 
-  const handleConnect = async (targetVendor: Vendor) => {
+  const handleConnect = async (targetVendor: MockVendor) => {
     try {
       toast({
         title: "Connection Request Sent",
@@ -88,11 +89,11 @@ export default function NearbyVendors({ vendorId }: NearbyVendorsProps) {
               <p className="text-xs">Try searching again or check your location settings</p>
             </div>
           ) : (
-            nearbyVendors.map((vendor: Vendor) => (
+            nearbyVendors.map((vendor: MockVendor) => (
               <div key={vendor.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-[--vendormate-primary] rounded-full flex items-center justify-center text-white font-medium">
-                    {vendor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                    {vendor.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
                   </div>
                   <div>
                     <p className="font-medium text-gray-800">{vendor.name}</p>

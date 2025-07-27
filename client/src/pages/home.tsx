@@ -30,6 +30,7 @@ import NearbyVendors from "@/components/nearby-vendors";
 import LanguageSelector from "@/components/language-selector";
 import { useVendor } from "@/hooks/use-vendor";
 import { useWebSocket } from "@/hooks/use-websocket";
+import { StaticApiService } from "@/lib/staticApi";
 
 export default function Home() {
   const { toast } = useToast();
@@ -69,17 +70,7 @@ export default function Home() {
     }
 
     try {
-      const response = await fetch(`/api/vendors/${vendor.vendorId}/inventory/use`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemName: itemInput.trim(), quantity: 1 }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update inventory');
-      }
-
-      const updatedItem = await response.json();
+      const updatedItem = await StaticApiService.useItem(itemInput.trim(), 1);
       setItemInput("");
       
       toast({

@@ -7,10 +7,10 @@ import { Languages } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Vendor } from "@shared/schema";
+import type { MockVendor } from "@/lib/mockData";
 
 interface LanguageSelectorProps {
-  vendor: Vendor | null;
+  vendor: MockVendor | null;
 }
 
 const languages = [
@@ -32,14 +32,12 @@ export default function LanguageSelector({ vendor }: LanguageSelectorProps) {
   const queryClient = useQueryClient();
   
   const updateMutation = useMutation({
-    mutationFn: async (updates: any) => {
+    mutationFn: async (updates: Partial<MockVendor>) => {
       if (!vendor) throw new Error('No vendor');
-      
-      const response = await apiRequest('PUT', `/api/vendors/${vendor.vendorId}`, updates);
-      return response.json();
+      return { ...vendor, ...updates };
     },
     onSuccess: (updatedVendor) => {
-      queryClient.setQueryData(['/api/vendors', vendor?.vendorId], updatedVendor);
+      queryClient.setQueryData(['vendor'], updatedVendor);
       toast({
         title: "Settings Updated",
         description: "Language preferences saved successfully",

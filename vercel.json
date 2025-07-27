@@ -1,24 +1,18 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs18.x"
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     }
-  },
+  ],
   "routes": [
     {
-      "src": "/api/vendors/register",
-      "dest": "/api/vendors.js"
-    },
-    {
-      "src": "/api/vendors/([^/]+)",
-      "dest": "/api/vendors.js"
-    },
-    {
-      "src": "/api/vendors/([^/]+)/inventory(.*)",
-      "dest": "/api/inventory.js"
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
     },
     {
       "src": "/(.*)",

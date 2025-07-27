@@ -1,90 +1,49 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-
-interface ChatMessage {
-  id: string;
-  vendorId: string;
-  vendorName: string;
-  message: string;
-  originalLanguage: string;
-  timestamp: string;
-}
+import { StaticApiService } from "@/lib/staticApi";
+import type { MockChatMessage } from "@/lib/mockData";
 
 export function useWebSocket(vendorId: string | undefined) {
-  const [isConnected, setIsConnected] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [isConnected, setIsConnected] = useState(true); // Always connected in static mode
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!vendorId) return;
+  // Fetch chat messages
+  const { data: messages = [] } = useQuery<MockChatMessage[]>({
+    queryKey: ['chat', 'messages'],
+    queryFn: () => StaticApiService.getChatMessages(),
+    refetchInterval: 5000, // Poll for new messages every 5 seconds
+  });
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setIsConnected(true);
-      // Register vendor with WebSocket server
-      ws.send(JSON.stringify({
-        type: 'register',
-        vendorId: vendorId
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'chat') {
-          setMessages(prev => [...prev, {
-            id: data.id,
-            vendorId: data.vendorId,
-            vendorName: data.vendorName,
-            message: data.message,
-            originalLanguage: data.originalLanguage,
-            timestamp: data.timestamp
-          }]);
-        }
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
-      }
-    };
-
-    ws.onclose = () => {
-      setIsConnected(false);
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+  // Send message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: (message: string) => StaticApiService.sendChatMessage(message),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages'] });
       toast({
-        title: "Connection Error",
-        description: "Lost connection to chat server",
+        title: "Message Sent",
+        description: "Your message has been sent to the community chat.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Send Failed",
+        description: "Unable to send message. Please try again.",
         variant: "destructive",
       });
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [vendorId, toast]);
+    },
+  });
 
   const sendMessage = (message: string) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'chat',
-        text: message
-      }));
-    } else {
-      toast({
-        title: "Connection Error",
-        description: "Unable to send message. Please check your connection.",
-        variant: "destructive",
-      });
-    }
+    if (!message.trim()) return;
+    sendMessageMutation.mutate(message);
   };
+
+  // Simulate connection status
+  useEffect(() => {
+    setIsConnected(true);
+  }, []);
 
   return {
     isConnected,

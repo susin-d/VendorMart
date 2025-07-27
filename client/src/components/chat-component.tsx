@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Send, Users } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 
 interface ChatComponentProps {
@@ -17,14 +16,8 @@ export default function ChatComponent({ vendorId }: ChatComponentProps) {
   const { isConnected, messages, sendMessage } = useWebSocket(vendorId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch initial chat messages
-  const { data: initialMessages = [] } = useQuery<any[]>({
-    queryKey: ['/api/chat/messages'],
-    enabled: !!vendorId,
-  });
-
-  // Combine initial messages with real-time messages
-  const allMessages = [...initialMessages, ...messages];
+  // Use messages directly from the WebSocket hook (which now uses static API)
+  const allMessages = messages;
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

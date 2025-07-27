@@ -2,10 +2,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Package, RefreshCw, AlertTriangle, Apple, Wheat, Carrot } from "lucide-react";
-import type { Inventory } from "@shared/schema";
+import type { MockInventory } from "@/lib/mockData";
 
 interface StockCardProps {
-  inventory: Inventory[];
+  inventory: MockInventory[];
   onRefresh: () => void;
 }
 

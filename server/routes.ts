@@ -48,14 +48,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const message = JSON.parse(data.toString());
         
-        if (message.type === 'register') {
+        if (message.type === 'register' && message.vendorId) {
           vendorId = message.vendorId;
           connectedClients.set(vendorId, ws);
           
           // Update vendor online status
           const vendor = await storage.getVendorByVendorId(vendorId);
           if (vendor) {
-            await storage.updateVendor(vendor.id, { isOnline: true, lastSeen: new Date() });
+            await storage.updateVendor(vendor.id, { isOnline: true });
           }
         }
         
@@ -113,7 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update vendor offline status
         storage.getVendorByVendorId(vendorId).then(vendor => {
           if (vendor) {
-            storage.updateVendor(vendor.id, { isOnline: false, lastSeen: new Date() });
+            storage.updateVendor(vendor.id, { isOnline: false });
           }
         });
       }

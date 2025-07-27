@@ -98,6 +98,7 @@ export const syncLogRelations = relations(syncLog, ({ one }) => ({
 // Insert schemas
 export const insertVendorSchema = createInsertSchema(vendors).omit({
   id: true,
+  vendorId: true,
   createdAt: true,
   lastSeen: true,
 });

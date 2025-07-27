@@ -81,10 +81,7 @@ export class DatabaseStorage implements IStorage {
     const nearbyVendors = await db
       .select()
       .from(vendors)
-      .where(and(
-        eq(vendors.isOnline, true),
-        eq(vendors.vendorId, vendorId) // This should be NOT equal in real implementation
-      ))
+      .where(eq(vendors.isOnline, true))
       .limit(10);
     
     return nearbyVendors.filter(v => v.vendorId !== vendorId);

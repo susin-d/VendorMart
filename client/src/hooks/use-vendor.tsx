@@ -45,19 +45,19 @@ export function useVendor() {
   }, []);
 
   // Fetch vendor data
-  const { data: vendor, isLoading: vendorLoading } = useQuery({
+  const { data: vendor, isLoading: vendorLoading } = useQuery<Vendor>({
     queryKey: ['/api/vendors', vendorId],
     enabled: !!vendorId,
   });
 
   // Fetch inventory
-  const { data: inventory = [] } = useQuery({
+  const { data: inventory = [] } = useQuery<Inventory[]>({
     queryKey: ['/api/vendors', vendorId, 'inventory'],
     enabled: !!vendorId,
   });
 
   // Fetch low stock items
-  const { data: lowStockItems = [] } = useQuery({
+  const { data: lowStockItems = [] } = useQuery<Inventory[]>({
     queryKey: ['/api/vendors', vendorId, 'inventory', 'low-stock'],
     enabled: !!vendorId,
   });

@@ -49,11 +49,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const message = JSON.parse(data.toString());
         
         if (message.type === 'register' && message.vendorId) {
-          vendorId = message.vendorId;
+          const messageVendorId = message.vendorId as string;
+          vendorId = messageVendorId;
           connectedClients.set(vendorId, ws);
           
           // Update vendor online status
-          const vendor = await storage.getVendorByVendorId(vendorId);
+          const vendor = await storage.getVendorByVendorId(messageVendorId);
           if (vendor) {
             await storage.updateVendor(vendor.id, { isOnline: true });
           }

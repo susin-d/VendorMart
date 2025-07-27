@@ -55,13 +55,6 @@ export function useWebSocket(vendorId: string | undefined) {
 
     ws.onclose = () => {
       setIsConnected(false);
-      // Attempt to reconnect after 3 seconds
-      setTimeout(() => {
-        if (vendorId) {
-          // Trigger useEffect to reconnect
-          setIsConnected(false);
-        }
-      }, 3000);
     };
 
     ws.onerror = (error) => {

@@ -35,6 +35,10 @@ export function useVendor() {
           setVendorId(newVendor.vendorId);
         } catch (error) {
           console.error('Failed to register vendor:', error);
+          // Set a fallback vendor ID if registration fails
+          const fallbackId = 'VM' + Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+          localStorage.setItem('vendorId', fallbackId);
+          setVendorId(fallbackId);
         }
       };
       

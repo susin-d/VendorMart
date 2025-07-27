@@ -1,7 +1,14 @@
 {
   "version": 2,
-  "buildCommand": "npx vite build client",
-  "outputDirectory": "dist/public",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist/public"
+      }
+    }
+  ],
   "routes": [
     {
       "src": "/assets/(.*)",
